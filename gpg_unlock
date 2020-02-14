@@ -1,0 +1,100 @@
+#!/usr/bin/env python
+
+import sys, os
+from subprocess import Popen, PIPE, STDOUT
+
+def drop_privileges(user, group=None):
+	'''
+	Drop privileges to the specified user and, when not a nonempty string,
+	group. If group is not a nonempty string, the user's main group will be
+	used. Any errors raised will be propagated.
+
+	NOTE: If the current uid already matches that of user, the function
+	will return *WITHOUT* attempting to set the group ID.
+	'''
+	import pwd, grp
+
+	# Read user info and UID
+	user_info = pwd.getpwnam(user)
+	uid = user_info.pw_uid
+
+	# If uid matches, there is nothing left to do
+	if uid == os.getuid(): return
+
+	# Find the GID
+	if group: gid = grp.getgrnam(group).gr_gid
+	else: gid = user_info.pw_gid
+
+	# Strip all group privileges
+	os.setgroups([])
+
+	# Set GID first; otherwise dropping UID will strip GID setting privileges
+	os.setgid(gid)
+	os.setuid(uid)
+
+
+if __name__ == '__main__':
+	try:
+		# If running in PAM, drop privileges to PAM_USER
+		pam_user = os.environ['PAM_USER']
+	except KeyError:
+		pass
+	else:
+		try:
+			drop_privileges(pam_user)
+		except Exception as e:
+			sys.exit(f'Failed to drop privileges: {e}')
+
+	# Take a list of key sources from the command line
+	sources = sys.argv[1:]
+
+	if not sources:
+		# If no sources specified, default to ~/.gnupg/autounlock
+		try:
+			import pwd
+			hdir = pwd.getpwuid(os.getuid()).pw_dir
+		except Exception as e:
+			sys.exit(f'ERROR: failed to read passwd database: {e}')
+
+		sources = (os.path.join(hdir, '.gnupg', 'autounlock'), )
+
+	keys = [ ]
+	for src in sources:
+		# Make sure file exists, then read it
+		if not os.path.isfile(src): continue
+
+		try:
+			with open(src, 'r') as f:
+				for l in f:
+					for t in l.split():
+						# Comments start with hash
+						if t.startswith('#'): break
+						keys.append(t)
+		except OSError:
+			print('Skipping unaccessible file', src, file=sys.stderr)
+
+	# Don't even read the password if there are no keys to unlock
+	if not keys: sys.exit(0)
+
+	# Read all bytes of the password, encode as hexstring
+	passwd = ''.join(f'{ord(c):02X}' for c in sys.stdin.read())
+
+	# Launch the agent, attach pipes to interact
+	try:
+		p = Popen(['gpg-connect-agent'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+	except Exception as e:
+		sys.exit(f'ERROR: failed to launch agent: {e}')
+
+	# Try to preset all keys collected from unlock files
+	for key in keys:
+		p.stdin.write(f'PRESET_PASSPHRASE {key} -1 {passwd}\n'.encode())
+	p.stdin.write(b'/bye\n')
+
+	# Finalize communications
+	try:
+		stdout, stderr = p.communicate()
+	except Exception as e:
+		sys.exit(f'ERROR: failed to communiate with agent: {e}')
+
+	if stdout: print(stdout.decode())
+	if stderr: print(stderr.decode(), file=sys.stderr)
