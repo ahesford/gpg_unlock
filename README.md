@@ -1,10 +1,11 @@
 # gpg_unlock
 
-This is a simple Python 3 script that reads, from `stdin`, a passphrase that is
-then passed to `gpg-connect-agent` to unlock one or more keys. By design,
-`gpg-connect-agent` will start `gpg-agent` if necessary. This script is
-intended primarily to be called from the `pam_exec.so` module, but may be used
-from a shell.
+This is a simple Python 3 script that reads, from `stdin`, the first line of
+input as a passphrase that is then passed to `gpg-connect-agent` to unlock one
+or more keys. By design, `gpg-connect-agent` will start `gpg-agent` if
+necessary. This script is intended primarily to be called from the
+`pam_exec.so` module, but may be used from a shell. Any trailing carriage
+return or newline is stripped from the password.
 
 ### Usage
 
@@ -52,10 +53,7 @@ To use `gpg_unlock` outside of PAM, invoke
 ```
 stty -echo && gpg_unlock
 ```
-from a shell and enter a passphrase. __Do not__ press enter after typing the
-passphrase; `gpg_unlock` does not strip the string and will encode the trailing
-newline as part of the passphrase. Instead, after typing the passphrase, signal
-EOF by typing (in most shells) `Ctrl-D`.
+from a shell and enter a passphrase, followed by `<Enter>`. 
 
 `gpg_unlock` will forward any `stdout` or `stderr` output from
 `gpg-connect-agent` to its own `stdout` and `stderr`, respectively.

@@ -77,7 +77,7 @@ if __name__ == '__main__':
 	if not keys: sys.exit(0)
 
 	# Read all bytes of the password, encode as hexstring
-	passwd = ''.join(f'{ord(c):02X}' for c in sys.stdin.read())
+	passwd = ''.join(f'{ord(c):02X}' for c in sys.stdin.readline().rstrip('\r\n'))
 
 	# Launch the agent, attach pipes to interact
 	try:
