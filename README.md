@@ -35,7 +35,7 @@ Valid keygrips may be identified by running
 No attempt is made to validate keygrips before `gpg-connect-agent` is invoked
 to unlock keys; `gpg-agent` should simply refuse to accept invalid keys.
 
-`gpg-unlock` may be invoked from PAM by adding
+`gpg_unlock` may be invoked from PAM by adding
 ```
 auth optional pam_exec.so expose_authtok /path/to/gpg_unlock
 ```
